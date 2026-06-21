@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Post } from '@nestjs/common';
+import { Controller, Get, Param, Post, Query } from '@nestjs/common';
 import { BooksService } from './books.service';
 
 @Controller('books')
@@ -6,8 +6,29 @@ export class BooksController {
   constructor(private readonly booksService: BooksService) {}
 
   @Get()
-  getAllBooks() {
-    return this.booksService.getAllBooks();
+  getAllBooks(@Query() query: any) {
+    console.log(query);
+    if (query.author && query.category) {
+      return this.booksService
+        .getAllBooks()
+        .filter(
+          (item) =>
+            item.author === query.author && item.category === query.category,
+        );
+    }
+    if (!query.author && !query.category) {
+      return this.booksService.getAllBooks();
+    }
+    if (query.author) {
+      return this.booksService
+        .getAllBooks()
+        .filter((item) => item.author === query.author);
+    }
+    if (query.category) {
+      return this.booksService
+        .getAllBooks()
+        .filter((item) => item.category === query.category);
+    }
   }
 
   @Get(':id')

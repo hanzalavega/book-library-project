@@ -43,6 +43,14 @@ export class BooksService {
       isbn: '978-1-23456-005-9',
       availableCopies: 10,
     },
+    {
+      id: 6,
+      name: 'Mystery Of Python',
+      author: 'David Miller',
+      category: 'Programming',
+      isbn: '978-1-23456-002-8',
+      availableCopies: 3,
+    },
   ];
 
   getAllBooks() {
