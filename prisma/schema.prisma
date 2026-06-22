@@ -1,0 +1,66 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum OrderStatus {
+  BORROWED
+  RETURNED
+  CANCELLED
+}
+
+model User {
+  id           Int      @id @default(autoincrement())
+  name         String
+  email        String   @unique
+  phone        String?
+  profileImage String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model Student {
+  id        Int      @id @default(autoincrement())
+  studentId String   @unique
+  name      String
+  email     String   @unique
+  phone     String?
+  address   String?
+  image     String?
+  orders    Order[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Book {
+  id                Int      @id @default(autoincrement())
+  title             String
+  author            String
+  isbn              String   @unique
+  description       String?
+  coverImage        String?
+  stockQuantity     Int
+  availableQuantity Int
+  orders            Order[]
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+model Order {
+  id         Int         @id @default(autoincrement())
+  studentId  Int
+  bookId     Int
+  issueDate  DateTime    @default(now())
+  returnDate DateTime?
+  status     OrderStatus @default(BORROWED)
+  student    Student     @relation(fields: [studentId], references: [id])
+  book       Book        @relation(fields: [bookId], references: [id])
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+
+  @@index([studentId])
+  @@index([bookId])
+}
