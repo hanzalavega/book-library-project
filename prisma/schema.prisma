@@ -13,13 +13,24 @@ enum OrderStatus {
 }
 
 model User {
-  id           Int      @id @default(autoincrement())
+  id           Int          @id @default(autoincrement())
   name         String
-  email        String   @unique
+  email        String       @unique
   phone        String?
   profileImage String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  profile      UserProfile?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+}
+
+model UserProfile {
+  id        Int      @id @default(autoincrement())
+  userId    Int      @unique
+  bio       String?
+  address   String?
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Student {
@@ -36,17 +47,54 @@ model Student {
 }
 
 model Book {
-  id                Int      @id @default(autoincrement())
+  id                Int          @id @default(autoincrement())
   title             String
-  author            String
-  isbn              String   @unique
+  slug              String?      @unique
+  legacyAuthor      String?      @map("author")
+  isbn              String       @unique
   description       String?
   coverImage        String?
   stockQuantity     Int
   availableQuantity Int
+  categoryId        Int?
+  category          Category?    @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  authors           BookAuthor[]
   orders            Order[]
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  @@index([categoryId])
+}
+
+model Category {
+  id          Int      @id @default(autoincrement())
+  name        String
+  slug        String   @unique
+  description String?
+  books       Book[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Author {
+  id        Int          @id @default(autoincrement())
+  name      String
+  slug      String       @unique
+  bio       String?
+  books     BookAuthor[]
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+}
+
+model BookAuthor {
+  bookId    Int
+  authorId  Int
+  book      Book     @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  author    Author   @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@id([bookId, authorId])
+  @@index([authorId])
 }
 
 model Order {

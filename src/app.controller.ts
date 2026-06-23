@@ -8,14 +8,4 @@ export class AppController {
   getHello(): string {
     return 'Library Management API running';
   }
-
-  @Get('health')
-  getHealth(): string {
-    return 'OK';
-  }
-
-  @Get('info')
-  getInfos(): string {
-    return 'guruttopurno infos';
-  }
 }
