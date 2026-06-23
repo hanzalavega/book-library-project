@@ -4,17 +4,23 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { OrderStatus } from '@prisma/client';
+import { MailService } from '../mail/mail.service';
+import { PdfService } from '../pdf/pdf.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { UpdateOrderDto } from './dto/update-order.dto';
 
 @Injectable()
 export class OrdersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly mailService: MailService,
+    private readonly pdfService: PdfService,
+  ) {}
 
   async create(createOrderDto: CreateOrderDto) {
     // In this library app, an Order means one student borrowing one book.
-    return this.prisma.$transaction(
+    const order = await this.prisma.$transaction(
       async (tx) => {
         const student = await tx.student.findUnique({
           where: { id: createOrderDto.studentId },
@@ -73,6 +79,15 @@ export class OrdersService {
         timeout: 20000,
       },
     );
+
+    void this.mailService.sendMail({
+      to: order.student.email,
+      subject: 'Book Borrow Confirmation',
+      text: `Hi ${order.student.name}, you borrowed "${order.book.title}".`,
+      html: `<p>Hi ${order.student.name},</p><p>You borrowed <strong>${order.book.title}</strong>.</p>`,
+    });
+
+    return order;
   }
 
   async findAll(page = 1, limit = 10) {
@@ -138,6 +153,32 @@ export class OrdersService {
 
   async cancel(id: number) {
     return this.restoreStockAndChangeStatus(id, OrderStatus.CANCELLED);
+  }
+
+  async generatePdf(id: number) {
+    const order = await this.findOne(id);
+    return this.pdfService.generateOrderPdf(order);
+  }
+
+  async sendPdfEmail(id: number) {
+    const order = await this.findOne(id);
+    const pdfBuffer = await this.pdfService.generateOrderPdf(order);
+
+    await this.mailService.sendMail({
+      to: order.student.email,
+      subject: `Borrow Receipt #${order.id}`,
+      text: `Hi ${order.student.name}, your borrow receipt is attached.`,
+      html: `<p>Hi ${order.student.name},</p><p>Your borrow receipt is attached.</p>`,
+      attachments: [
+        {
+          filename: `borrow-order-${order.id}.pdf`,
+          content: pdfBuffer,
+          contentType: 'application/pdf',
+        },
+      ],
+    });
+
+    return { message: `PDF email attempted for order id ${id}` };
   }
 
   private async restoreStockAndChangeStatus(

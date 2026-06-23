@@ -5,14 +5,19 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { CloudinaryService } from '../cloudinary/cloudinary.service';
 import { createSlug } from '../common/utils/slug.util';
 import { PrismaService } from '../prisma/prisma.service';
+import { BookSearchQueryDto } from './dto/book-search-query.dto';
 import { CreateBookDto } from './dto/create-book.dto';
 import { UpdateBookDto } from './dto/update-book.dto';
 
 @Injectable()
 export class BooksService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly cloudinaryService: CloudinaryService,
+  ) {}
 
   async create(createBookDto: CreateBookDto) {
     const { authorIds, ...bookData } = createBookDto;
@@ -60,19 +65,21 @@ export class BooksService {
     }
   }
 
-  async findAll(page = 1, limit = 10) {
+  async findAll(page = 1, limit = 10, filters: BookSearchQueryDto = {}) {
     const safePage = Math.max(page, 1);
     const safeLimit = Math.max(limit, 1);
     const skip = (safePage - 1) * safeLimit;
+    const where = this.buildBookWhere(filters);
 
     const data = await this.prisma.book.findMany({
+      where,
       skip,
       take: safeLimit,
       orderBy: { createdAt: 'desc' },
       include: this.bookInclude,
     });
 
-    const total = await this.prisma.book.count();
+    const total = await this.prisma.book.count({ where });
 
     return {
       data,
@@ -166,6 +173,52 @@ export class BooksService {
     return { message: `Book with id ${id} deleted successfully` };
   }
 
+  async uploadCoverImage(id: number, file: Express.Multer.File) {
+    if (!file) {
+      throw new BadRequestException('Image file is required');
+    }
+
+    await this.findOne(id);
+    const uploadResult = await this.cloudinaryService.uploadImage(
+      file,
+      'library/books',
+    );
+
+    return this.prisma.book.update({
+      where: { id },
+      data: {
+        coverImage: uploadResult.secure_url,
+      },
+      include: this.bookInclude,
+    });
+  }
+
+  async findBorrowedStudents(id: number) {
+    const book = await this.prisma.book.findUnique({
+      where: { id },
+      include: {
+        category: true,
+        authors: {
+          include: {
+            author: true,
+          },
+        },
+        orders: {
+          orderBy: { createdAt: 'desc' },
+          include: {
+            student: true,
+          },
+        },
+      },
+    });
+
+    if (!book) {
+      throw new NotFoundException(`Book with id ${id} was not found`);
+    }
+
+    return book;
+  }
+
   private handleUniqueError(error: unknown) {
     if (
       error instanceof Prisma.PrismaClientKnownRequestError &&
@@ -185,6 +238,83 @@ export class BooksService {
       },
     },
   } satisfies Prisma.BookInclude;
+
+  private buildBookWhere(filters: BookSearchQueryDto): Prisma.BookWhereInput {
+    const where: Prisma.BookWhereInput = {};
+
+    if (filters.title) {
+      where.title = {
+        contains: filters.title,
+        mode: 'insensitive',
+      };
+    }
+
+    if (filters.isbn) {
+      where.isbn = {
+        contains: filters.isbn,
+        mode: 'insensitive',
+      };
+    }
+
+    if (filters.availability === 'available') {
+      where.availableQuantity = { gt: 0 };
+    }
+
+    if (filters.availability === 'unavailable') {
+      where.availableQuantity = 0;
+    }
+
+    if (filters.stockStatus === 'in_stock') {
+      where.availableQuantity = { gt: 0 };
+    }
+
+    if (filters.stockStatus === 'out_of_stock') {
+      where.availableQuantity = 0;
+    }
+
+    if (filters.stockStatus === 'low') {
+      where.availableQuantity = {
+        gt: 0,
+        lte: 3,
+      };
+    }
+
+    if (filters.category) {
+      where.category = {
+        is: {
+          OR: [
+            {
+              name: {
+                contains: filters.category,
+                mode: 'insensitive',
+              },
+            },
+            {
+              slug: {
+                contains: filters.category,
+                mode: 'insensitive',
+              },
+            },
+          ],
+        },
+      };
+    }
+
+    if (filters.author) {
+      where.authors = {
+        some: {
+          author: {
+            name: {
+              contains: filters.author,
+              mode: 'insensitive',
+            },
+          },
+        },
+      };
+    }
+
+    return where;
+  }
 
   private async ensureCategoryExists(
     categoryId: number | undefined,

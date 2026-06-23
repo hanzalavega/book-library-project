@@ -8,11 +8,14 @@ import {
   Patch,
   Post,
   Query,
+  Res,
+  StreamableFile,
 } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { UpdateOrderDto } from './dto/update-order.dto';
 import { OrdersService } from './orders.service';
+import type { Response } from 'express';
 
 @ApiTags('orders')
 @Controller('orders')
@@ -35,6 +38,26 @@ export class OrdersController {
   @Get(':id')
   findOne(@Param('id', ParseIntPipe) id: number) {
     return this.ordersService.findOne(id);
+  }
+
+  @Get(':id/pdf')
+  async downloadPdf(
+    @Param('id', ParseIntPipe) id: number,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    const pdfBuffer = await this.ordersService.generatePdf(id);
+
+    response.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `attachment; filename="borrow-order-${id}.pdf"`,
+    });
+
+    return new StreamableFile(pdfBuffer);
+  }
+
+  @Post(':id/send-pdf-email')
+  sendPdfEmail(@Param('id', ParseIntPipe) id: number) {
+    return this.ordersService.sendPdfEmail(id);
   }
 
   @Patch(':id/cancel')

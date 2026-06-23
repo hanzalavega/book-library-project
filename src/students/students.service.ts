@@ -1,22 +1,38 @@
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { CloudinaryService } from '../cloudinary/cloudinary.service';
+import { MailService } from '../mail/mail.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateStudentDto } from './dto/create-student.dto';
 import { UpdateStudentDto } from './dto/update-student.dto';
 
 @Injectable()
 export class StudentsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly cloudinaryService: CloudinaryService,
+    private readonly mailService: MailService,
+  ) {}
 
   async create(createStudentDto: CreateStudentDto) {
     try {
-      return await this.prisma.student.create({
+      const student = await this.prisma.student.create({
         data: createStudentDto,
       });
+
+      void this.mailService.sendMail({
+        to: student.email,
+        subject: 'Welcome to the Library',
+        text: `Hi ${student.name}, welcome to the library management system.`,
+        html: `<p>Hi ${student.name},</p><p>Welcome to the library management system.</p>`,
+      });
+
+      return student;
     } catch (error) {
       this.handleUniqueError(error);
       throw error;
@@ -80,6 +96,54 @@ export class StudentsService {
     });
 
     return { message: `Student with id ${id} deleted successfully` };
+  }
+
+  async uploadImage(id: number, file: Express.Multer.File) {
+    if (!file) {
+      throw new BadRequestException('Image file is required');
+    }
+
+    await this.findOne(id);
+    const uploadResult = await this.cloudinaryService.uploadImage(
+      file,
+      'library/students',
+    );
+
+    return this.prisma.student.update({
+      where: { id },
+      data: {
+        image: uploadResult.secure_url,
+      },
+    });
+  }
+
+  async findBorrowedBooks(id: number) {
+    const student = await this.prisma.student.findUnique({
+      where: { id },
+      include: {
+        orders: {
+          orderBy: { createdAt: 'desc' },
+          include: {
+            book: {
+              include: {
+                category: true,
+                authors: {
+                  include: {
+                    author: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!student) {
+      throw new NotFoundException(`Student with id ${id} was not found`);
+    }
+
+    return student;
   }
 
   private handleUniqueError(error: unknown) {

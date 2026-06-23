@@ -8,6 +8,8 @@ import { OrdersModule } from './orders/orders.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { CategoriesModule } from './categories/categories.module';
 import { AuthorsModule } from './authors/authors.module';
+import { CloudinaryModule } from './cloudinary/cloudinary.module';
+import { MailModule } from './mail/mail.module';
 
 @Module({
   imports: [
@@ -19,6 +21,8 @@ import { AuthorsModule } from './authors/authors.module';
     OrdersModule,
     CategoriesModule,
     AuthorsModule,
+    CloudinaryModule,
+    MailModule,
   ],
   controllers: [AppController],
   providers: [],
